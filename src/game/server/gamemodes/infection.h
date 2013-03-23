@@ -1,0 +1,32 @@
+/* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
+/* If you are missing that file, acquire a complete release at teeworlds.com.                */
+#ifndef GAME_SERVER_GAMEMODES_INF_H
+#define GAME_SERVER_GAMEMODES_INF_H
+
+#include <game/server/gamecontroller.h>
+#include <game/server/entity.h>
+
+class CGameControllerINF : public IGameController
+{
+	bool m_GameStarted;
+	IConsole *m_pConsole;
+	IConsole *Console() { return m_pConsole; }
+public:
+	CGameControllerINF(class CGameContext *pGameServer);
+	virtual void Tick();
+	virtual void DoWincheck();
+	virtual bool CanSpawn(int Team, vec2 *pPos, int ClientID = -1);
+	virtual void OnCharacterSpawn(class CCharacter *pChr);
+	virtual bool IsFriendlyFire(int ClientID1, int ClientID2);
+
+	//Called when somebody gets caught by zombie or really die
+	virtual int OnCharacterDeath(class CCharacter *pVictim, class CPlayer *pKiller, int Weapon);
+
+	virtual void OnPlayerInfoChange(class CPlayer *pP);
+	virtual void StartRound();
+	virtual void EndRound();
+
+	virtual bool GameStarted();
+};
+
+#endif

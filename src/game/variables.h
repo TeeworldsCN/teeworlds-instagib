@@ -83,6 +83,18 @@ MACRO_CONFIG_INT(SvVoteKick, sv_vote_kick, 1, 0, 1, CFGFLAG_SERVER, "Allow votin
 MACRO_CONFIG_INT(SvVoteKickMin, sv_vote_kick_min, 0, 0, MAX_CLIENTS, CFGFLAG_SERVER, "Minimum number of players required to start a kick vote")
 MACRO_CONFIG_INT(SvVoteKickBantime, sv_vote_kick_bantime, 5, 0, 1440, CFGFLAG_SERVER, "The time to ban a player if kicked by vote. 0 makes it just use kick")
 
+MACRO_CONFIG_INT(SvWallLength, sv_wall_length, 400, 100, 800, CFGFLAG_SERVER, "Length of the wall")
+MACRO_CONFIG_INT(SvWallLife, sv_wall_life, 30, 10, 60, CFGFLAG_SERVER, "Time till the wall disappears")
+MACRO_CONFIG_INT(SvWallDelay, sv_wall_delay, 1, 0, 5, CFGFLAG_SERVER, "Time till the wall becomes visible and active")
+MACRO_CONFIG_INT(SvStartDelay, sv_start_delay, 10, 2, 60, CFGFLAG_SERVER, "Delay before the IZombie becomes chosen")
+MACRO_CONFIG_INT(SvZombiesExplode, sv_zombies_explode, 1, 0, 2, CFGFLAG_SERVER, "If zombies should explode when they die. 0 = No, 1 = Only IZombie, 2 = All")
+MACRO_CONFIG_INT(SvHammerhitStrength, sv_hammerhit_strength, 15, 2, 60, CFGFLAG_SERVER, "Strength of hammerhit of zombies")
+MACRO_CONFIG_INT(SvAirstrikeKills, sv_airstrike_kills, 5, 2, 10, CFGFLAG_SERVER, "Kills needed for an airstrike")
+MACRO_CONFIG_STR(SvAirstrikeText, sv_airstrike_text, 128, "Red Alert. US Military gave %s an airstrike!", CFGFLAG_SERVER, "Text shown in text when a player earns an airstrike")
+MACRO_CONFIG_INT(SvSuperjumpKills, sv_superjump_kills, 2, 0, 10, CFGFLAG_SERVER, "Kills needed for an zombie-superjump")
+MACRO_CONFIG_STR(SvSuperjumpText, sv_superjump_text, 128, "%s mutated and can now superjump!", CFGFLAG_SERVER, "Text shown in text when a zombie gets ability for superjump")
+MACRO_CONFIG_INT(SvSuperjumpForce, sv_superjump_force, 40, 10, 100, CFGFLAG_SERVER, "Strength of superjump")
+
 // debug
 #ifdef CONF_DEBUG // this one can crash the server if not used correctly
 	MACRO_CONFIG_INT(DbgDummies, dbg_dummies, 0, 0, 15, CFGFLAG_SERVER, "")

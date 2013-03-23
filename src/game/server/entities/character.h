@@ -4,6 +4,7 @@
 #define GAME_SERVER_ENTITIES_CHARACTER_H
 
 #include <game/server/entity.h>
+#include <game/server/entities/wall.h>
 #include <game/generated/server_data.h>
 #include <game/generated/protocol.h>
 
@@ -63,6 +64,11 @@ public:
 
 	bool IsAlive() const { return m_Alive; }
 	class CPlayer *GetPlayer() { return m_pPlayer; }
+	//
+	CCharacterCore *GetCore() { return &m_Core; }
+	void SendKillMessage(int Killer, int Weapon);
+	void Infect(int From, vec2 Vel);
+	CWall *m_pWall;
 
 private:
 	// player controlling this character
@@ -130,6 +136,10 @@ private:
 	int m_ReckoningTick; // tick that we are performing dead reckoning From
 	CCharacterCore m_SendCore; // core that we should send
 	CCharacterCore m_ReckoningCore; // the dead reckoning core
+
+	//
+	int m_Hammerhits;
+	vec2 m_FirstHit;
 
 };
 

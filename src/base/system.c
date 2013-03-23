@@ -64,6 +64,8 @@ static MEMSTATS memory_stats = {0};
 
 static NETSOCKET invalid_socket = {NETTYPE_INVALID, -1, -1};
 
+static int rand_initialized = 0;
+
 void dbg_logger(DBG_LOGGER logger)
 {
 	loggers[num_loggers++] = logger;
@@ -1989,6 +1991,15 @@ unsigned str_quickhash(const char *str)
 	return hash;
 }
 
+int rand_num()
+{
+	if(!rand_initialized)
+	{
+		srand(time_timestamp());
+		rand_initialized = 1;
+	}
+	return rand();
+}
 
 #if defined(__cplusplus)
 }

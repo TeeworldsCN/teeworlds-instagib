@@ -20,3 +20,8 @@ teeworlds*
 teeworlds_srv*
 tileset_border*
 versionsrv*
+
+#eclipse
+.cproject
+.project
+.settings/

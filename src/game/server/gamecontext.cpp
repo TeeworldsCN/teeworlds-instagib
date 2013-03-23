@@ -9,10 +9,11 @@
 #include <game/version.h>
 #include <game/collision.h>
 #include <game/gamecore.h>
-#include "gamemodes/dm.h"
+/*#include "gamemodes/dm.h"
 #include "gamemodes/tdm.h"
 #include "gamemodes/ctf.h"
-#include "gamemodes/mod.h"
+#include "gamemodes/mod.h"*/
+#include "gamemodes/infection.h"
 
 enum
 {
@@ -631,7 +632,24 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			pMessage++;
 		}
 
-		SendChat(ClientID, Team, pMsg->m_pMessage);
+		if(str_comp_num(pMsg->m_pMessage, "/info", 5) == 0)
+		{
+			SendChatTarget(ClientID, "Infection, originally created by Gravity and before by others, has been cloned by Teetime cause the sources got lost");
+			SendChatTarget(ClientID, "See github.com/Teetime/teeworlds for the sourcode.");
+		}
+		else if(str_comp_num(pMsg->m_pMessage, "/help", 5) == 0)
+		{
+			SendChatTarget(ClientID, "Zombies are invading the world and humans have to save themselves, with weapons and a wall build by the hammer");
+			SendChatTarget(ClientID, "The winner is the team, either zombies or humans, which survive the round");
+		}
+		else if(str_comp_num(pMsg->m_pMessage, "/cmdlist", 8) == 0)
+		{
+			SendChatTarget(ClientID, "What cmdlist?! Go home.");
+		}
+		else if(pMsg->m_pMessage[0] == '/')
+			SendChatTarget(ClientID, "Unknown command");
+		else
+			SendChat(ClientID, Team, pMsg->m_pMessage);
 	}
 	else if(MsgID == NETMSGTYPE_CL_CALLVOTE)
 	{
@@ -1468,14 +1486,14 @@ void CGameContext::OnInit(/*class IKernel *pKernel*/)
 	//players = new CPlayer[MAX_CLIENTS];
 
 	// select gametype
-	if(str_comp(g_Config.m_SvGametype, "mod") == 0)
+	/*if(str_comp(g_Config.m_SvGametype, "mod") == 0)
 		m_pController = new CGameControllerMOD(this);
 	else if(str_comp(g_Config.m_SvGametype, "ctf") == 0)
 		m_pController = new CGameControllerCTF(this);
 	else if(str_comp(g_Config.m_SvGametype, "tdm") == 0)
 		m_pController = new CGameControllerTDM(this);
-	else
-		m_pController = new CGameControllerDM(this);
+	else*/
+		m_pController = new CGameControllerINF(this);
 
 	// setup core world
 	//for(int i = 0; i < MAX_CLIENTS; i++)

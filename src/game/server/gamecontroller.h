@@ -73,11 +73,11 @@ public:
 
 	void DoWarmup(int Seconds);
 
-	void StartRound();
-	void EndRound();
+	virtual void StartRound();
+	virtual void EndRound();
 	void ChangeMap(const char *pToMap);
 
-	bool IsFriendlyFire(int ClientID1, int ClientID2);
+	virtual bool IsFriendlyFire(int ClientID1, int ClientID2);
 
 	bool IsForceBalanced();
 
@@ -129,7 +129,7 @@ public:
 	virtual void OnPlayerInfoChange(class CPlayer *pP);
 
 	//
-	virtual bool CanSpawn(int Team, vec2 *pPos);
+	virtual bool CanSpawn(int Team, vec2 *pPos, int ClientID);
 
 	/*
 
@@ -142,6 +142,8 @@ public:
 	int ClampTeam(int Team);
 
 	virtual void PostReset();
+
+	virtual bool GameStarted() { return false; }
 };
 
 #endif

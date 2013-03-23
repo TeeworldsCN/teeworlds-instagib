@@ -8,6 +8,7 @@
 #include "character.h"
 #include "laser.h"
 #include "projectile.h"
+#include "airstrike.h"
 
 //input count
 struct CInputCount
@@ -57,9 +58,9 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 	m_EmoteStop = -1;
 	m_LastAction = -1;
 	m_LastNoAmmoSound = -1;
-	m_ActiveWeapon = WEAPON_GUN;
-	m_LastWeapon = WEAPON_HAMMER;
+
 	m_QueuedWeapon = -1;
+	m_Hammerhits = 0;
 
 	m_pPlayer = pPlayer;
 	m_Pos = Pos;
@@ -67,6 +68,7 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 	m_Core.Reset();
 	m_Core.Init(&GameServer()->m_World.m_Core, GameServer()->Collision());
 	m_Core.m_Pos = m_Pos;
+	m_Core.m_HasSuperjump = m_pPlayer->m_Kills >= g_Config.m_SvSuperjumpKills;
 	GameServer()->m_World.m_Core.m_apCharacters[m_pPlayer->GetCID()] = &m_Core;
 
 	m_ReckoningTick = 0;
@@ -75,6 +77,20 @@ bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 
 	GameServer()->m_World.InsertEntity(this);
 	m_Alive = true;
+
+	if(GameServer()->m_pController->GameStarted())
+		m_pPlayer->m_Infected = true;
+
+	if(m_pPlayer->m_Infected)
+	{
+		m_ActiveWeapon = WEAPON_HAMMER;
+		m_LastWeapon = WEAPON_HAMMER;
+	}
+	else
+	{
+		m_ActiveWeapon = WEAPON_GUN;
+		m_LastWeapon = WEAPON_HAMMER;
+	}
 
 	GameServer()->m_pController->OnCharacterSpawn(this);
 
@@ -313,7 +329,9 @@ void CCharacter::FireWeapon()
 				else
 					Dir = vec2(0.f, -1.f);
 
-				pTarget->TakeDamage(vec2(0.f, -1.f) + normalize(Dir + vec2(0.f, -1.1f)) * 10.0f, g_pData->m_Weapons.m_Hammer.m_pBase->m_Damage,
+				//Infected players can make damage with hammer
+				if(m_pPlayer->m_Infected)
+					pTarget->TakeDamage(vec2(0.f, -1.f) + normalize(Dir + vec2(0.f, -1.1f)) * 10.0f, g_pData->m_Weapons.m_Hammer.m_pBase->m_Damage,
 					m_pPlayer->GetCID(), m_ActiveWeapon);
 				Hits++;
 			}
@@ -321,6 +339,38 @@ void CCharacter::FireWeapon()
 			// if we Hit anything, we have to wait for the reload
 			if(Hits)
 				m_ReloadTimer = Server()->TickSpeed()/3;
+
+			if(!m_pPlayer->m_Infected)
+			{
+				if(m_pPlayer->m_Kills >= g_Config.m_SvAirstrikeKills)
+				{
+					CAirstrike::CreateAirstrike(GameWorld(), m_Pos, m_pPlayer->GetCID());
+					m_pPlayer->m_Kills -= g_Config.m_SvAirstrikeKills;
+				}
+				else
+				{
+					m_Hammerhits++;
+
+					if(m_Hammerhits == 1)
+					{
+						m_FirstHit = m_Pos;
+						if(m_pWall)
+							m_pWall->Reset();
+					}
+					else
+					{
+						vec2 SecondSpot = m_Pos;
+						if(length(SecondSpot - m_FirstHit) > g_Config.m_SvWallLength)
+						{
+							vec2 Dir = normalize(m_Pos - m_FirstHit);
+							SecondSpot = m_FirstHit+Dir*g_Config.m_SvWallLength;
+						}
+
+						m_pWall = new CWall(GameWorld(), m_FirstHit, SecondSpot, m_pPlayer->GetCID());
+						m_Hammerhits = 0;
+					}
+				}
+			}
 
 		} break;
 
@@ -697,6 +747,8 @@ void CCharacter::Die(int Killer, int Weapon)
 	// we got to wait 0.5 secs before respawning
 	m_pPlayer->m_RespawnTick = Server()->Tick()+Server()->TickSpeed()/2;
 	int ModeSpecial = GameServer()->m_pController->OnCharacterDeath(this, GameServer()->m_apPlayers[Killer], Weapon);
+	if(m_pWall)
+		m_pWall->Reset(); // Delete the wall of a dying player
 
 	char aBuf[256];
 	str_format(aBuf, sizeof(aBuf), "kill killer='%d:%s' victim='%d:%s' weapon=%d special=%d",
@@ -726,10 +778,17 @@ void CCharacter::Die(int Killer, int Weapon)
 
 bool CCharacter::TakeDamage(vec2 Force, int Dmg, int From, int Weapon)
 {
-	m_Core.m_Vel += Force;
+	if(GameServer()->m_apPlayers[From]->m_Infected)
+	{
+		Infect(From, Force * (g_Config.m_SvHammerhitStrength/10.f));
+	}
+	else
+	{
+		m_Core.m_Vel += Force;
+	}
 
-	if(GameServer()->m_pController->IsFriendlyFire(m_pPlayer->GetCID(), From) && !g_Config.m_SvTeamdamage)
-		return false;
+	/*if(GameServer()->m_pController->IsFriendlyFire(m_pPlayer->GetCID(), From) && !g_Config.m_SvTeamdamage)
+		return false;*/
 
 	// m_pPlayer only inflicts half damage on self
 	if(From == m_pPlayer->GetCID())
@@ -749,29 +808,60 @@ bool CCharacter::TakeDamage(vec2 Force, int Dmg, int From, int Weapon)
 		GameServer()->CreateDamageInd(m_Pos, 0, Dmg);
 	}
 
-	if(Dmg)
+	if(m_pPlayer->m_Infected && GameServer()->m_apPlayers[From]->m_Infected && Weapon == WEAPON_HAMMER)
 	{
-		if(m_Armor)
+		//Lets be nice to our zombie mates
+		if(Dmg)
 		{
-			if(Dmg > 1)
+			if(m_Armor < 10)
 			{
-				m_Health--;
-				Dmg--;
+				if(Dmg > 1)
+				{
+					m_Health = clamp(m_Health+1, 0, 10);
+					Dmg--;
+				}
+
+				if(Dmg > m_Armor)
+				{
+					Dmg -= m_Armor;
+					m_Armor = 10;
+				}
+				else
+				{
+					m_Armor = clamp(m_Armor+Dmg, 0, 10);
+					Dmg = 0;
+				}
 			}
 
-			if(Dmg > m_Armor)
-			{
-				Dmg -= m_Armor;
-				m_Armor = 0;
-			}
-			else
-			{
-				m_Armor -= Dmg;
-				Dmg = 0;
-			}
+			m_Health = clamp(m_Health+Dmg, 0, 10);
 		}
+	}
+	else if(!GameServer()->m_pController->IsFriendlyFire(m_pPlayer->GetCID(), From))
+	{
+		if(Dmg)
+		{
+			if(m_Armor)
+			{
+				if(Dmg > 1)
+				{
+					m_Health--;
+					Dmg--;
+				}
 
-		m_Health -= Dmg;
+				if(Dmg > m_Armor)
+				{
+					Dmg -= m_Armor;
+					m_Armor = 0;
+				}
+				else
+				{
+					m_Armor -= Dmg;
+					Dmg = 0;
+				}
+			}
+
+			m_Health -= Dmg;
+		}
 	}
 
 	m_DamageTakenTick = Server()->Tick();
@@ -875,4 +965,37 @@ void CCharacter::Snap(int SnappingClient)
 	}
 
 	pCharacter->m_PlayerFlags = GetPlayer()->m_PlayerFlags;
+}
+
+void CCharacter::SendKillMessage(int Killer, int Weapon)
+{
+	// send the kill message
+	CNetMsg_Sv_KillMsg Msg;
+	Msg.m_Killer = Killer;
+	Msg.m_Victim = m_pPlayer->GetCID();
+	Msg.m_Weapon = Weapon;
+	Msg.m_ModeSpecial = 0;
+	Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, -1);
+}
+
+void CCharacter::Infect(int From, vec2 Vel)
+{
+	m_Core.m_Vel += Vel;
+
+	if(m_pPlayer->m_Infected)
+		return;
+
+	for(int i = 0; i < NUM_WEAPONS; i++)
+		m_aWeapons[i].m_Got = false;
+	GiveWeapon(WEAPON_HAMMER, -1);
+	m_LastWeapon = WEAPON_HAMMER;
+	m_ActiveWeapon = WEAPON_HAMMER;
+
+	if(m_pWall)
+		m_pWall->Reset();
+
+	GameServer()->m_pController->OnCharacterDeath(this, GameServer()->m_apPlayers[From], WEAPON_HAMMER);
+	SendKillMessage(From, WEAPON_HAMMER);
+	GameServer()->CreatePlayerSpawn(m_Pos);
+	GameServer()->m_pController->OnPlayerInfoChange(m_pPlayer);
 }
