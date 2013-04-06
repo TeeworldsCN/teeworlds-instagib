@@ -87,6 +87,7 @@ MACRO_CONFIG_INT(SvWallLength, sv_wall_length, 400, 100, 800, CFGFLAG_SERVER, "L
 MACRO_CONFIG_INT(SvWallLife, sv_wall_life, 30, 10, 60, CFGFLAG_SERVER, "Time till the wall disappears")
 MACRO_CONFIG_INT(SvWallDelay, sv_wall_delay, 1, 0, 5, CFGFLAG_SERVER, "Time till the wall becomes visible and active")
 MACRO_CONFIG_INT(SvStartDelay, sv_start_delay, 10, 2, 60, CFGFLAG_SERVER, "Delay before the IZombie becomes chosen")
+MACRO_CONFIG_INT(SvRoundstartDelay, sv_roundstart_delay, 5, 2, 10, CFGFLAG_SERVER, "Delay between rounds")
 MACRO_CONFIG_INT(SvZombiesExplode, sv_zombies_explode, 1, 0, 2, CFGFLAG_SERVER, "If zombies should explode when they die. 0 = No, 1 = Only IZombie, 2 = All")
 MACRO_CONFIG_INT(SvHammerhitStrength, sv_hammerhit_strength, 15, 2, 60, CFGFLAG_SERVER, "Strength of hammerhit of zombies")
 MACRO_CONFIG_INT(SvAirstrikeKills, sv_airstrike_kills, 5, 2, 10, CFGFLAG_SERVER, "Kills needed for an airstrike")

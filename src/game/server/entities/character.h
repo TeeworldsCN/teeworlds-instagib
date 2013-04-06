@@ -67,7 +67,7 @@ public:
 	//
 	CCharacterCore *GetCore() { return &m_Core; }
 	void SendKillMessage(int Killer, int Weapon);
-	void Infect(int From, vec2 Vel);
+	void Infect(int From, vec2 Vel, bool Message = true);
 	CWall *m_pWall;
 
 private:

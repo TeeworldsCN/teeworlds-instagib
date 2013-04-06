@@ -9,7 +9,7 @@
 #include "infection.h"
 
 
-CGameControllerINF::CGameControllerINF(class CGameContext *pGameServer)
+CGameControllerINF::CGameControllerINF(CGameContext *pGameServer)
 : IGameController(pGameServer)
 {
 	m_pGameType = "Infection";
@@ -53,14 +53,11 @@ void CGameControllerINF::Tick()
 				CPlayer *pP = GameServer()->m_apPlayers[Rand];
 				if(pP && pP->GetTeam() != TEAM_SPECTATORS)
 				{
-					/*if(pP->m_Infected)
-						continue;*/
-
-					pP->m_Infected = true;
 					pP->m_StartZombie = true;
 					m_GameStarted = true;
 					GameServer()->SendBroadcast("You have been chosen as start zombie!", Rand);
-					OnPlayerInfoChange(pP); // update color
+					if(pP->GetCharacter())
+						pP->GetCharacter()->Infect(pP->GetCID(), vec2(0, 0), false);
 
 					char aBuf[256];
 					str_format(aBuf, sizeof(aBuf), "%d: %s chosen as start zombie", Rand, Server()->ClientName(Rand));
@@ -72,7 +69,7 @@ void CGameControllerINF::Tick()
 	}
 }
 
-void CGameControllerINF::OnCharacterSpawn(class CCharacter *pChr)
+void CGameControllerINF::OnCharacterSpawn(CCharacter *pChr)
 {
 	pChr->IncreaseHealth(10);
 
@@ -89,9 +86,9 @@ void CGameControllerINF::OnCharacterSpawn(class CCharacter *pChr)
 	OnPlayerInfoChange(pChr->GetPlayer());
 }
 
-int CGameControllerINF::OnCharacterDeath(class CCharacter *pVictim, class CPlayer *pKiller, int Weapon)
+int CGameControllerINF::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKiller, int Weapon)
 {
-	if(!pKiller)
+	if(!pKiller || !m_GameStarted)
 		return 0;
 
 	// Being evil
@@ -106,10 +103,10 @@ int CGameControllerINF::OnCharacterDeath(class CCharacter *pVictim, class CPlaye
 			GameServer()->CreateExplosion(pVictim->GetCore()->m_Pos, pVictim->GetPlayer()->GetCID(), WEAPON_HAMMER, true);
 			GameServer()->CreateSound(pVictim->GetCore()->m_Pos, SOUND_GRENADE_EXPLODE);
 
-			//Infect humans arround zombies
+			//Infect humans around zombies
 			CCharacter *apEnts[MAX_CLIENTS];
-			float Radius = 135.0f * 1.5f;
-			float InnerRadius = 48.0f * 1.5f;
+			float Radius = 135.0f * 1.2f;
+			float InnerRadius = 48.0f * 1.2f;
 			int Num = GameServer()->m_World.FindEntities(pVictim->GetCore()->m_Pos, Radius, (CEntity**)apEnts, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
 			for(int i = 0; i < Num; i++)
 			{
@@ -154,7 +151,7 @@ int CGameControllerINF::OnCharacterDeath(class CCharacter *pVictim, class CPlaye
 				char aBuf[256];
 				str_format(aBuf, sizeof(aBuf), g_Config.m_SvSuperjumpText, Server()->ClientName(pKiller->GetCID()));
 				GameServer()->SendChatTarget(-1, aBuf);
-				GameServer()->SendBroadcast("You got the ability for superjump. Keep pressing jump to use", pKiller->GetCID());
+				GameServer()->SendBroadcast("You earned superjump, hold jump to use", pKiller->GetCID());
 				if(pKiller->GetCharacter())
 					 pKiller->GetCharacter()->GetCore()->m_HasSuperjump = true;
 			}
@@ -165,7 +162,7 @@ int CGameControllerINF::OnCharacterDeath(class CCharacter *pVictim, class CPlaye
 	return 0;
 }
 
-void CGameControllerINF::OnPlayerInfoChange(class CPlayer *pP)
+void CGameControllerINF::OnPlayerInfoChange(CPlayer *pP)
 {
 	pP->m_TeeInfos.m_UseCustomColor = 1;
 	if(pP->m_Infected)
@@ -186,6 +183,7 @@ void CGameControllerINF::StartRound()
 	IGameController::StartRound();
 
 	m_GameStarted = false;
+	m_ZombiesWon = false;
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
 		CPlayer *pP = GameServer()->m_apPlayers[i];
@@ -202,6 +200,10 @@ void CGameControllerINF::StartRound()
 void CGameControllerINF::EndRound()
 {
 	IGameController::EndRound();
+	if(m_ZombiesWon)
+		GameServer()->SendBroadcast("Zombies won!", -1);
+	else
+		GameServer()->SendBroadcast("Humans won!", -1);
 }
 
 void CGameControllerINF::DoWincheck()
@@ -224,7 +226,10 @@ void CGameControllerINF::DoWincheck()
 
 		// All ingame players are Zombies
 		if(PlayerIngame == Zombies)
+		{
+			m_ZombiesWon = true;
 			EndRound();
+		}
 		else
 			IGameController::DoWincheck();
 	}

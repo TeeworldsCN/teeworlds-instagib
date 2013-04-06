@@ -748,7 +748,7 @@ void CCharacter::Die(int Killer, int Weapon)
 	m_pPlayer->m_RespawnTick = Server()->Tick()+Server()->TickSpeed()/2;
 	int ModeSpecial = GameServer()->m_pController->OnCharacterDeath(this, GameServer()->m_apPlayers[Killer], Weapon);
 	if(m_pWall)
-		m_pWall->Reset(); // Delete the wall of a dying player
+		m_pWall->Reset();
 
 	char aBuf[256];
 	str_format(aBuf, sizeof(aBuf), "kill killer='%d:%s' victim='%d:%s' weapon=%d special=%d",
@@ -978,11 +978,13 @@ void CCharacter::SendKillMessage(int Killer, int Weapon)
 	Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, -1);
 }
 
-void CCharacter::Infect(int From, vec2 Vel)
+void CCharacter::Infect(int From, vec2 Vel, bool Message)
 {
 	m_Core.m_Vel += Vel;
+	if(m_pWall)
+		m_pWall->Reset();
 
-	if(m_pPlayer->m_Infected)
+	if(m_pPlayer->m_Infected || !GameServer()->m_pController->GameStarted())
 		return;
 
 	for(int i = 0; i < NUM_WEAPONS; i++)
@@ -991,11 +993,10 @@ void CCharacter::Infect(int From, vec2 Vel)
 	m_LastWeapon = WEAPON_HAMMER;
 	m_ActiveWeapon = WEAPON_HAMMER;
 
-	if(m_pWall)
-		m_pWall->Reset();
-
 	GameServer()->m_pController->OnCharacterDeath(this, GameServer()->m_apPlayers[From], WEAPON_HAMMER);
-	SendKillMessage(From, WEAPON_HAMMER);
+	m_pPlayer->m_Infected = true;
+	if(Message)
+		SendKillMessage(From, WEAPON_HAMMER);
 	GameServer()->CreatePlayerSpawn(m_Pos);
 	GameServer()->m_pController->OnPlayerInfoChange(m_pPlayer);
 }

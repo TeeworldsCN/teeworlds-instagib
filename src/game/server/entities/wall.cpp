@@ -1,5 +1,6 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
+#include <base/tl/base.h>
 #include <game/generated/protocol.h>
 #include <game/server/gamecontext.h>
 #include <engine/shared/config.h>
@@ -27,18 +28,41 @@ void CWall::Reset()
 		GameServer()->GetPlayerChar(m_Owner)->m_pWall = 0;
 }
 
+int CWall::FindCharacters(vec2 Pos0, vec2 Pos1, float Radius, CCharacter **ppChars, int Max)
+{
+	// Find other players
+	float ClosestLen = distance(Pos0, Pos1) * 100.0f;
+	CCharacter *pClosest = 0;
+	int Num = 0;
+
+	CCharacter *pCh = (CCharacter *)GameWorld()->FindFirst(CGameWorld::ENTTYPE_CHARACTER);
+	for(; pCh; pCh = (CCharacter *)pCh->TypeNext())
+	{
+
+		vec2 IntersectPos = closest_point_on_line(Pos0, Pos1, pCh->m_Pos);
+		float Len = distance(pCh->m_Pos, IntersectPos);
+		if(Len < pCh->m_ProximityRadius+Radius)
+		{
+			if(ppChars)
+				ppChars[Num] = pCh;
+			Num++;
+			if(Num == Max)
+				break;
+		}
+	}
+
+	return Num;
+}
+
 void CWall::HitCharacter(vec2 From, vec2 To)
 {
-	vec2 At;
-	CCharacter *pHit = 0;
+	CCharacter *apEnts[MAX_CLIENTS];
+	int Num = FindCharacters(From, To, 2.5f, apEnts, MAX_CLIENTS);
 
-	for(int i = 0; i < MAX_CLIENTS; i++)
+	for(int i = 0; i < Num; i++)
 	{
-		pHit = GameWorld()->IntersectCharacter(From, To, 2.5f, At, 0);
-		if(pHit && pHit->GetPlayer()->m_Infected)
-		{
-			pHit->Die(m_Owner, WEAPON_WORLD);
-		}
+		if(apEnts[i]->GetPlayer()->m_Infected)
+			apEnts[i]->Die(m_Owner, WEAPON_WORLD);
 	}
 }
 
@@ -67,38 +91,50 @@ void CWall::Tick()
 
 void CWall::Snap(int SnappingClient)
 {
-	if(NetworkClipped(SnappingClient))
-		return;
+	vec2 StartPos = m_Pos, EndPos = m_From;
+
+	if(NetworkClipped(SnappingClient, StartPos))
+	{
+		if(NetworkClipped(SnappingClient, EndPos))
+			return;
+		else
+		{
+			swap(StartPos, EndPos);
+		}
+	}
+
 
 	CNetObj_Laser *pObj = static_cast<CNetObj_Laser *>(Server()->SnapNewItem(NETOBJTYPE_LASER, m_ID, sizeof(CNetObj_Laser)));
-	if(!pObj)
+	CNetObj_Laser *pEnd = static_cast<CNetObj_Laser *>(Server()->SnapNewItem(NETOBJTYPE_LASER, m_IDEnd, sizeof(CNetObj_Laser)));
+	if(!pObj || !pEnd)
 		return;
 
 	if(m_Active)
 	{
-		pObj->m_X = (int) m_Pos.x;
-		pObj->m_Y = (int) m_Pos.y;
-		pObj->m_FromX = (int) m_From.x;
-		pObj->m_FromY = (int) m_From.y;
+		pObj->m_X = (int) StartPos.x;
+		pObj->m_Y = (int) StartPos.y;
+		pObj->m_FromX = (int) EndPos.x;
+		pObj->m_FromY = (int) EndPos.y;
 		pObj->m_StartTick = Server()->Tick();
+		//
+		pEnd->m_FromY = (int) EndPos.y;
+		pEnd->m_FromX = (int) EndPos.x;
+		pEnd->m_Y = (int) EndPos.y;
+		pEnd->m_X = (int) EndPos.x;
+		pEnd->m_StartTick = Server()->Tick();
 	}
-	else //In case of inactivity mark the startpoint
+	else //In case of inactivity mark the start and end-point
 	{
-		pObj->m_FromY = (int) m_Pos.y;
-		pObj->m_FromX = (int) m_Pos.x;
-		pObj->m_Y = (int) m_Pos.y;
-		pObj->m_X = (int) m_Pos.x;
+		pObj->m_Y = (int) StartPos.y;
+		pObj->m_X = (int) StartPos.x;
+		pObj->m_FromY = (int) StartPos.y;
+		pObj->m_FromX = (int) StartPos.x;
 		pObj->m_StartTick = Server()->Tick();
+		//
+		pEnd->m_FromY = (int) EndPos.y;
+		pEnd->m_FromX = (int) EndPos.x;
+		pEnd->m_Y = (int) EndPos.y;
+		pEnd->m_X = (int) EndPos.x;
+		pEnd->m_StartTick = Server()->Tick();
 	}
-
-	//Do an extra end point for better looking
-	CNetObj_Laser *pEnd = static_cast<CNetObj_Laser *>(Server()->SnapNewItem(NETOBJTYPE_LASER, m_IDEnd, sizeof(CNetObj_Laser)));
-	if(!pEnd)
-		return;
-
-	pEnd->m_FromY = (int) m_From.y;
-	pEnd->m_FromX = (int) m_From.x;
-	pEnd->m_Y = (int) m_From.y;
-	pEnd->m_X = (int) m_From.x;
-	pEnd->m_StartTick = Server()->Tick();
 }
