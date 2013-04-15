@@ -38,8 +38,9 @@ int CWall::FindCharacters(vec2 Pos0, vec2 Pos1, float Radius, CCharacter **ppCha
 	CCharacter *pCh = (CCharacter *)GameWorld()->FindFirst(CGameWorld::ENTTYPE_CHARACTER);
 	for(; pCh; pCh = (CCharacter *)pCh->TypeNext())
 	{
-
-		vec2 IntersectPos = closest_point_on_line(Pos0, Pos1, pCh->m_Pos);
+		vec2 IntersectPos = Pos0;
+		if(!equals(Pos0, Pos1))
+			IntersectPos = closest_point_on_line(Pos0, Pos1, pCh->m_Pos);
 		float Len = distance(pCh->m_Pos, IntersectPos);
 		if(Len < pCh->m_ProximityRadius+Radius)
 		{
