@@ -124,7 +124,7 @@ int CGameControllerINF::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKiller, 
 
 		if(pVictim->GetPlayer() != pKiller)
 		{
-			pKiller->m_Score += 5;
+			pKiller->m_Score++;
 			pKiller->m_Kills++;
 
 			if(pKiller->m_Kills > 0 && pKiller->m_Kills % g_Config.m_SvAirstrikeKills == 0)
@@ -132,7 +132,7 @@ int CGameControllerINF::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKiller, 
 				char aBuf[256];
 				str_format(aBuf, sizeof(aBuf), g_Config.m_SvAirstrikeText, Server()->ClientName(pKiller->GetCID()));
 				GameServer()->SendChatTarget(-1, aBuf);
-				GameServer()->SendBroadcast("You earned an airstrike. Use hammer to use it :D", pKiller->GetCID());
+				GameServer()->SendBroadcast("You earned an airstrike. Use hammer to use it", pKiller->GetCID());
 			}
 		}
 	}
@@ -143,7 +143,7 @@ int CGameControllerINF::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKiller, 
 
 		if(pVictim->GetPlayer() != pKiller)
 		{
-			pKiller->m_Score += 2;
+			pKiller->m_Score++;
 			pKiller->m_Kills++;
 
 			if(pKiller->m_Kills == g_Config.m_SvSuperjumpKills)
