@@ -100,8 +100,8 @@ int CGameControllerINF::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKiller, 
 		// Make explosion and infect other players
 		if((g_Config.m_SvZombiesExplode == 1 && pVictim->GetPlayer()->m_StartZombie) || g_Config.m_SvZombiesExplode == 2)
 		{
-			GameServer()->CreateExplosion(pVictim->GetCore()->m_Pos, pVictim->GetPlayer()->GetCID(), WEAPON_HAMMER, true);
-			GameServer()->CreateSound(pVictim->GetCore()->m_Pos, SOUND_GRENADE_EXPLODE);
+			for(int i = 0; i < 5; i++)
+				GameServer()->CreateExplosion(pVictim->GetCore()->m_Pos, pVictim->GetPlayer()->GetCID(), WEAPON_HAMMER, true);
 
 			//Infect humans around zombies
 			CCharacter *apEnts[MAX_CLIENTS];

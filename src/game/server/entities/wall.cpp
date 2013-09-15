@@ -31,8 +31,6 @@ void CWall::Reset()
 int CWall::FindCharacters(vec2 Pos0, vec2 Pos1, float Radius, CCharacter **ppChars, int Max)
 {
 	// Find other players
-	float ClosestLen = distance(Pos0, Pos1) * 100.0f;
-	CCharacter *pClosest = 0;
 	int Num = 0;
 
 	CCharacter *pCh = (CCharacter *)GameWorld()->FindFirst(CGameWorld::ENTTYPE_CHARACTER);
