@@ -26,6 +26,7 @@
 #include <engine/shared/snapshot.h>
 
 #include <mastersrv/mastersrv.h>
+#include <game/server/gamecontext.h>
 
 #include "register.h"
 #include "server.h"
@@ -700,6 +701,20 @@ void CServer::DoSnapshot()
 	GameServer()->OnPostSnap();
 }
 
+int CServer::NewClientNoAuthCallback(int ClientID, void *pUser)
+{
+	CServer *pThis = (CServer *)pUser;
+	pThis->m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
+	pThis->m_aClients[ClientID].m_aName[0] = 0;
+	pThis->m_aClients[ClientID].m_aClan[0] = 0;
+	pThis->m_aClients[ClientID].m_Country = -1;
+	pThis->m_aClients[ClientID].m_Authed = AUTHED_NO;
+	pThis->m_aClients[ClientID].m_AuthTries = 0;
+	pThis->m_aClients[ClientID].m_pRconCmdToSend = 0;
+	pThis->m_aClients[ClientID].Reset();
+ 	pThis->SendMap(ClientID);
+ 	return 0;
+}
 
 int CServer::NewClientCallback(int ClientID, void *pUser)
 {
@@ -711,6 +726,8 @@ int CServer::NewClientCallback(int ClientID, void *pUser)
 	pThis->m_aClients[ClientID].m_Authed = AUTHED_NO;
 	pThis->m_aClients[ClientID].m_AuthTries = 0;
 	pThis->m_aClients[ClientID].m_pRconCmdToSend = 0;
+	pThis->m_aClients[ClientID].m_NonceCount = 0;
+	pThis->m_aClients[ClientID].m_LastNonceCount = 0;
 	pThis->m_aClients[ClientID].Reset();
 	return 0;
 }
@@ -850,12 +867,59 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 					return;
 				}
 
-				m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
-				SendMap(ClientID);
+				if(g_Config.m_SvSpoofProtection)
+				{
+					//set nonce
+					m_aClients[ClientID].m_Nonce = rand()%5+5;//5-9
+					m_aClients[ClientID].m_LastNonceCount = Tick();
+					m_aClients[ClientID].m_State = CClient::STATE_SPOOFCHECK;
+ 					CMsgPacker Msg(NETMSG_MAP_CHANGE);
+					Msg.AddString("", 0);//mapname
+					Msg.AddInt(0);//crc
+					Msg.AddInt(0);//size
+					SendMsgEx(&Msg, MSGFLAG_VITAL|MSGFLAG_FLUSH, ClientID, true);
+				}
+				else
+				{
+					m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
+					SendMap(ClientID);
+				}
 			}
 		}
 		else if(Msg == NETMSG_REQUEST_MAP_DATA)
 		{
+			if(g_Config.m_SvSpoofProtection)
+			{
+				if(m_aClients[ClientID].m_State == CClient::STATE_SPOOFCHECK)
+				{
+					int Chunk = Unpacker.GetInt();
+					if(m_aClients[ClientID].m_NonceCount != Chunk || m_aClients[ClientID].m_LastNonceCount+TickSpeed() < Tick())//wrong number sent
+						m_NetServer.Drop(ClientID, "Kicked by spoofprotection. Please try again!");
+ 					m_aClients[ClientID].m_LastNonceCount = Tick();
+ 					if(m_aClients[ClientID].m_NonceCount != m_aClients[ClientID].m_Nonce)
+					{
+						CMsgPacker Msg(NETMSG_MAP_DATA);
+						Msg.AddInt(0);//last
+						Msg.AddInt(0);//crc
+						Msg.AddInt(m_aClients[ClientID].m_NonceCount);//chunk
+						Msg.AddInt(1);//size
+						Msg.AddRaw("a", 1);//data
+						SendMsgEx(&Msg, MSGFLAG_VITAL|MSGFLAG_FLUSH, ClientID, true);
+						m_aClients[ClientID].m_NonceCount++;
+					}
+					else//done. continue as usual
+					{
+						m_aClients[ClientID].m_State = CClient::STATE_POSTSPOOFCHECK;
+						dbg_msg(0, "done");
+					}
+ 					return;
+				}
+				else if(m_aClients[ClientID].m_State == CClient::STATE_POSTSPOOFCHECK)
+				{//Too many noncenumbers sent
+					m_NetServer.Drop(ClientID, "Kicked by spoofprotection. Please try again!");
+					return;
+				}
+			}
 			if(m_aClients[ClientID].m_State < CClient::STATE_CONNECTING)
 				return;
 
@@ -899,7 +963,7 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 				net_addr_str(m_NetServer.ClientAddr(ClientID), aAddrStr, sizeof(aAddrStr), true);
 
 				char aBuf[256];
-				str_format(aBuf, sizeof(aBuf), "player is ready. ClientID=%x addr=%s", ClientID, aAddrStr);
+				str_format(aBuf, sizeof(aBuf), "player is ready. ClientID=%x addr=%s secure=%s", ClientID, aAddrStr, m_NetServer.HasSecurityToken(ClientID)?"yes":"no");
 				Console()->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "server", aBuf);
 				m_aClients[ClientID].m_State = CClient::STATE_READY;
 				GameServer()->OnClientConnected(ClientID);
@@ -1190,6 +1254,20 @@ void CServer::PumpNetwork()
 
 	m_ServerBan.Update();
 	m_Econ.Update();
+
+	if(g_Config.m_SvSpoofProtection)
+	{
+		for(int i = 0; i < MAX_CLIENTS; i++)
+		{
+			if(m_aClients[i].m_State == CClient::STATE_POSTSPOOFCHECK)
+			//if(m_aClients[i].m_State == CClient::STATE_POSTSPOOFCHECK &&
+			//	m_aClients[i].m_LastNonceCount+TickSpeed() < Tick())
+			{ // when the time is over: continue joining process
+				m_aClients[i].m_State = CClient::STATE_CONNECTING;
+				SendMap(i);
+			}
+		}
+	}
 }
 
 char *CServer::GetMapName()
@@ -1290,7 +1368,7 @@ int CServer::Run()
 		return -1;
 	}
 
-	m_NetServer.SetCallbacks(NewClientCallback, DelClientCallback, this);
+	m_NetServer.SetCallbacks(NewClientCallback, NewClientNoAuthCallback, DelClientCallback, this);
 
 	m_Econ.Init(Console(), &m_ServerBan);
 
@@ -1470,8 +1548,8 @@ void CServer::ConStatus(IConsole::IResult *pResult, void *pUser)
 			{
 				const char *pAuthStr = pThis->m_aClients[i].m_Authed == CServer::AUTHED_ADMIN ? "(Admin)" :
 										pThis->m_aClients[i].m_Authed == CServer::AUTHED_MOD ? "(Mod)" : "";
-				str_format(aBuf, sizeof(aBuf), "id=%d addr=%s name='%s' score=%d %s", i, aAddrStr,
-					pThis->m_aClients[i].m_aName, pThis->m_aClients[i].m_Score, pAuthStr);
+				str_format(aBuf, sizeof(aBuf), "id=%d addr=%s name='%s' score=%d client=%d secure=%s %s", i, aAddrStr,
+					pThis->m_aClients[i].m_aName, pThis->m_aClients[i].m_Score, 0, pThis->m_NetServer.HasSecurityToken(i) ? "yes":"no", pAuthStr);
 			}
 			else
 				str_format(aBuf, sizeof(aBuf), "id=%d addr=%s connecting", i, aAddrStr);
